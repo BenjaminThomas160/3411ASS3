@@ -19,8 +19,8 @@ import math
 #   2 - Opponent played here
 
 EMPTY = 0
-PLAYER = 1
-OPPONENT = 2
+PLAYER = 2
+OPPONENT = 1
 
 ILLEGAL_MOVE  = 0
 STILL_PLAYING = 1
@@ -116,7 +116,7 @@ def heuristic(player: int, boards: np.array) -> int:
     out = 0
     for i in range(1,10):
         board_heuristic = np.count_nonzero(boards[i] == player) - np.count_nonzero(boards[i] == swap_player(player))
-        out += board_heuristic**5
+        out += board_heuristic**3
     return out
     """
     out = 0
@@ -146,7 +146,7 @@ def alphabeta(
     if game_won( swap_player(player), boards ):   # LOSS
         return -1000 + m  # better to win faster (or lose slower)
     
-    if m - move == 5:
+    if m - move == 7:
         h = heuristic(player, boards)
         return h - m
 
@@ -179,50 +179,18 @@ def sim_rand_game(player, node):
     child_board = node.state.copy()
     random_move = random.choice([i for i, x in enumerate(child_board[node.curr_board]) if x == EMPTY and i != 0])
     child_board[node.curr_board][random_move] = player
-    new_node = McNode(child_board, random_move, parent=None, visits=1)
-    #check_existing = list(filter(lambda x: x == new_node, node.children))
-    #if check_existing:
-    #    new_node = check_existing[0]
-    #    new_node.visited()
-    # else:
-    #     node.children.append(new_node) 
+    new_node = McNode(child_board, random_move, parent=node)
+    check_existing = list(filter(lambda x: x == new_node, node.children))
+    if check_existing:
+        new_node = check_existing[0]
+    else:
+        node.children.append(new_node) 
     if game_won(player, new_node.state):
         return player
     else:
-        res = sim_rand_game(swap_player(player), new_node)
-        return res
+        sim_rand_game(swap_player(player), new_node)
 
 
-DBREPTH = 2**15
-def montecarl(
-    player: int,
-    boards: np.array,
-    curr_board: int,
-    root: Optional[McNode] = None
-) -> int:
-    if not root:
-        root = McNode(boards, curr_board)
-    for _ in range(DBREPTH):
-        node = root
-        while node.children:
-            node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(2 * math.log(node.visits) / x.visits))
-        
-        if not game_won(player, node.state):
-            child_board = node.state.copy()
-            random_move = random.choice([i for i, x in enumerate(child_board[node.curr_board]) if x == EMPTY and i != 0])
-            child_board[node.curr_board][random_move] = player
-            new_node = McNode(child_board, random_move, parent=node)
-            node.children.append(new_node)
-            node = new_node
-            
-        winner = sim_rand_game(player, node)
-        
-        while node:
-            node.visits += 1
-            if winner == player:
-                node.wins += 1
-            node = node.parent
-    return root
 
 def get_num_moves(b):
     m = 0
@@ -252,24 +220,21 @@ def full_board( board ):
 
 
 
-#best_move = np.zeros(81,dtype=np.int32)
+best_move = np.zeros(81,dtype=np.int32)
 move = 0
 # choose a move to play
 def play(m):
 #    m = get_num_moves(boards[curr])
-    #alphabeta(PLAYER, m, boards, MIN_EVAL, MAX_EVAL, best_move, curr)
-    root = montecarl(PLAYER, boards, curr)
-    best_child = max(root.children, key=lambda x: x.visits)
-    best_move = best_child.curr_board
-    print(m)
-    for n in root.children:
-        print(n)
+    alphabeta(PLAYER, m, boards, MIN_EVAL, MAX_EVAL, best_move, curr)
+    #root = montecarl(PLAYER, boards, curr)
+    #best_child = max(root.children, key=lambda x: x.visits)
+    #best_move = best_child.curr_board
    # root.state.index([x for x in best_child.state if x != boards[curr]][0])
-    place(curr, best_move, PLAYER)
+    place(curr, best_move[m], PLAYER)
  #   print(f"board: {curr} move: {best_move} {m}")
     print(f"bestmove : {best_move}")
 
-    return best_move
+    return best_move[m]
     
 # place a move in the global boards
 def place( board, num, player ):
