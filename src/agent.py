@@ -125,13 +125,6 @@ def heuristic(player: int, boardz: np.array) -> int:
         board_heuristic = np.count_nonzero(boardz[i] == player) - np.count_nonzero(boardz[i] == swap_player(player))
         out += board_heuristic**5
     return out
-    """
-    out = 0
-    for i in range(1,10):
-        board_heuristic = board_nearly_won(player, boards[i]) - board_nearly_won(swap_player(player), boards[i])
-        out += board_heuristic**5
-    return out
-    """
         
 
 """
@@ -180,25 +173,25 @@ def alphabeta(
         return( alpha )"""
 
 def sim_rand_game( node: McNode ) -> int:
+    if node.is_winner:
+        return node.is_winner
     board = node.state[node.curr_board]
     if np.count_nonzero(board != EMPTY) == 9:
         return 0
     
-    if game_won(swap_player(node.active_player), node.state):
-        return swap_player(node.active_player)
+    if node.check_win():
+        return node.get_opposing_player()
 
     new_node = node.pick_random_child()
-    if node.is_winner:
-        return node.is_winner
 
     res = sim_rand_game(new_node)
     new_node.visited()
-    if res == PLAYER:
+    if res == new_node.get_opposing_player():
         new_node.won()
     return res
 
 
-DBREPTH = 2**10
+DBREPTH = 2**11
 def montecarl(
     player: int,
     boardz: np.array,
@@ -206,7 +199,7 @@ def montecarl(
     root: Optional[McNode] = None
 ) -> McNode:
     if not root:
-        root = McNode(deepcopy(boardz), curr_board)
+        root = McNode(deepcopy(boardz), curr_board, player=player)
     for _ in range(DBREPTH):
         node = root
         while node.fully_expanded():
@@ -216,7 +209,7 @@ def montecarl(
 
         while node:
             node.visited()
-            if winner == player:
+            if winner == node.get_opposing_player():
                 node.won()
             node = node.parent
     return root
@@ -264,6 +257,19 @@ def play(m: int, r: Optional[McNode]):
     print("best_child: ", best_child)
     best_move = best_child.curr_board
     print(m)
+    for i in best_child.children:
+        print(i.is_winner)
+    n = root
+    print("active players: ")
+    i = 0
+    while n:
+        if n.children:
+            print(i, n.active_player)
+            n = n.children[0]
+        else:
+            break
+        i += 1
+
    # root.state.index([x for x in best_child.state if x != boards[curr]][0])
     place(curr, best_move, PLAYER)
  #   print(f"board: {curr} move: {best_move} {m}")

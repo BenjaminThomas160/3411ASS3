@@ -44,7 +44,8 @@ class McNode:
         self.visits += 1
 
     def won(self):
-        self.wins += 1
+        if self.is_winner != Players.OPPONENT.value: 
+            self.wins += 1
     
     def pick_random_child(self):
         c = self.get_random_moves()
@@ -72,8 +73,10 @@ class McNode:
         # if the child is a winner than the parrent is a loser and vice versa
         if child.check_win():
             self.is_winner = self.active_player
-            child.is_winner = self.get_opposing_player()
+            child.is_winner = child.get_opposing_player()
             self.children = [child]
+            if self.is_winner == Players.OPPONENT.value:
+                self.wins = 0
         else:
             self.children.append(child)
         return child
@@ -84,8 +87,6 @@ class McNode:
         """
         if self.fully_expanded():
             return random.choice([i for i, x in enumerate(self.state[self.curr_board]) if x == Players.EMPTY.value and i != 0])
-        num_children = len(self.children)
-        num_blank = np.count_nonzero(self.state[self.curr_board] == Players.EMPTY.value)
         return random.choice([i for i, x in enumerate(self.state[self.curr_board]) if x == Players.EMPTY.value and i != 0 and not self.get_move_in_children(i)])
 
     def set_parent(self, parent) -> None:
