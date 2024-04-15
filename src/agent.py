@@ -6,7 +6,7 @@
 
 import socket
 import sys
-from typing import Optional
+from typing import Optional, Tuple
 import numpy as np
 from mcnode import McNode
 from copy import deepcopy
@@ -90,10 +90,17 @@ def board_nearly_won(p, bd) -> int:
         max((bd[3] == p) + (bd[5] == p) + (bd[7] == p) - 2*((bd[3] == o) + (bd[5] == o) + (bd[7] == o)), 0)
     )
 
-def game_won( player, boards ):
-    for b in range(1,len(boards)):
-        if board_won(player, boards[b]):
+def game_won( player: int, boardz: np.array ) -> bool:
+    for b in range(1,len(boardz)):
+        if board_won(player, boardz[b]):
             return True
+    return False
+
+def game_over( curr_board: np.array, boardz: np.array ) -> bool:
+    if game_won(PLAYER, boardz) or game_won(OPPONENT, boardz):
+        return True
+    if np.count_nonzero(boardz[curr_board] != EMPTY) == 9:
+        return 0
     return False
 
 def swap_player(p):
@@ -105,17 +112,17 @@ abcache = {}
 
 def ab_to_hash(
     player: int,
-    boards: np.array,
+    boardz: np.array,
     alpha: int,
     beta: int,
     curr_board: int
 ) -> str:
-    return f"{player},{boards.tobytes()},{alpha},{beta},{curr_board}"
+    return f"{player},{boardz.tobytes()},{alpha},{beta},{curr_board}"
 
-def heuristic(player: int, boards: np.array) -> int:
+def heuristic(player: int, boardz: np.array) -> int:
     out = 0
     for i in range(1,10):
-        board_heuristic = np.count_nonzero(boards[i] == player) - np.count_nonzero(boards[i] == swap_player(player))
+        board_heuristic = np.count_nonzero(boardz[i] == player) - np.count_nonzero(boardz[i] == swap_player(player))
         out += board_heuristic**5
     return out
     """
@@ -127,7 +134,7 @@ def heuristic(player: int, boards: np.array) -> int:
     """
         
 
-
+"""
 def alphabeta(
     player: int,
     m: int,
@@ -167,59 +174,48 @@ def alphabeta(
                     if alpha >= beta: # cutoff
                         return( alpha )
 
-    if this_move == 0:  # no legal moves
+    if this_move == 0:  #no legal moves
         return( 0 )     # DRAW
     else:
-        return( alpha )
+        return( alpha )"""
 
-def sim_rand_game(player, node):
+def sim_rand_game( node: McNode ) -> Tuple[McNode,int]:
     board = node.state[node.curr_board]
     if np.count_nonzero(board != EMPTY) == 9:
-        return 0
-    child_board = node.state.copy()
-    random_move = random.choice([i for i, x in enumerate(child_board[node.curr_board]) if x == EMPTY and i != 0])
-    child_board[node.curr_board][random_move] = player
-    new_node = McNode(child_board, random_move, parent=None, visits=1)
-    #check_existing = list(filter(lambda x: x == new_node, node.children))
-    #if check_existing:
-    #    new_node = check_existing[0]
-    #    new_node.visited()
-    # else:
-    #     node.children.append(new_node) 
-    if game_won(player, new_node.state):
-        return player
-    else:
-        res = sim_rand_game(swap_player(player), new_node)
-        return res
+        return (node, 0)
+    
+    if game_won(swap_player(node.active_player), node.state):
+        return (node, swap_player(node.active_player))
+
+    new_node = node.pick_random_child()
+    res = sim_rand_game(new_node)
+    return res
 
 
-DBREPTH = 2**15
+DBREPTH = 2**11
 def montecarl(
     player: int,
-    boards: np.array,
+    boardz: np.array,
     curr_board: int,
     root: Optional[McNode] = None
-) -> int:
+) -> McNode:
     if not root:
-        root = McNode(boards, curr_board)
+        root = McNode(deepcopy(boardz), curr_board)
     for _ in range(DBREPTH):
         node = root
-        while node.children:
-            node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(2 * math.log(node.visits) / x.visits))
+        while node.fully_expanded():
+            node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(3 * math.log(node.visits) / x.visits))
         
-        if not game_won(player, node.state):
-            child_board = node.state.copy()
-            random_move = random.choice([i for i, x in enumerate(child_board[node.curr_board]) if x == EMPTY and i != 0])
-            child_board[node.curr_board][random_move] = player
-            new_node = McNode(child_board, random_move, parent=node)
-            node.children.append(new_node)
-            node = new_node
+        """if not game_over(node.curr_board, node.state):
+            random_move = random.choice([i for i, x in enumerate(node.state[node.curr_board]) if x == EMPTY and i != 0])
+            new_node = node.make_child(random_move)
+            node = new_node"""
             
-        winner = sim_rand_game(player, node)
-        
+        node, outcome = sim_rand_game(node)
+
         while node:
             node.visits += 1
-            if winner == player:
+            if outcome == player:
                 node.wins += 1
             node = node.parent
     return root
@@ -253,17 +249,20 @@ def full_board( board ):
 
 
 #best_move = np.zeros(81,dtype=np.int32)
+curr_best_child = None
 move = 0
 # choose a move to play
-def play(m):
+def play(m: int, r: Optional[McNode]):
+    global curr_best_child
 #    m = get_num_moves(boards[curr])
     #alphabeta(PLAYER, m, boards, MIN_EVAL, MAX_EVAL, best_move, curr)
-    root = montecarl(PLAYER, boards, curr)
+    root = montecarl(PLAYER, deepcopy(boards), curr, r)
     best_child = max(root.children, key=lambda x: x.visits)
+    curr_best_child = best_child
+    print("root: ", root)
+    print("best_child: ", best_child)
     best_move = best_child.curr_board
     print(m)
-    for n in root.children:
-        print(n)
    # root.state.index([x for x in best_child.state if x != boards[curr]][0])
     place(curr, best_move, PLAYER)
  #   print(f"board: {curr} move: {best_move} {m}")
@@ -300,7 +299,7 @@ def parse(string):
         # place the first move (randomly generated for opponent)
         place(int(args[0]), int(args[1]), 2)
         move = 1
-        return play(1)  # choose and return the second move
+        return play(1, None)  # choose and return the second move
 
     # third_move(K,L,M) means that the first and second move were
     # in square L of sub-board K, and square M of sub-board L,
@@ -311,7 +310,7 @@ def parse(string):
         # place the second move (chosen by opponent)
         place(curr, int(args[2]), 2)
         move = 2
-        return play(2) # choose and return the third move
+        return play(2, None) # choose and return the third move
 
     # nex_move(M) means that the previous move was into
     # square M of the designated sub-board,
@@ -319,8 +318,9 @@ def parse(string):
     elif command == "next_move":
         # place the previous move (chosen by opponent)
         place(curr, int(args[0]), 2)
+        root = curr_best_child.get_move_in_children(int(args[0]))
         move += 2
-        return play(move) # choose and return our next move
+        return play(move, root) # choose and return our next move
 
     elif command == "win":
         print("Yay!! We win!! :)")
