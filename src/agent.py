@@ -179,20 +179,26 @@ def alphabeta(
     else:
         return( alpha )"""
 
-def sim_rand_game( node: McNode ) -> Tuple[McNode,int]:
+def sim_rand_game( node: McNode ) -> int:
     board = node.state[node.curr_board]
     if np.count_nonzero(board != EMPTY) == 9:
-        return (node, 0)
+        return 0
     
     if game_won(swap_player(node.active_player), node.state):
-        return (node, swap_player(node.active_player))
+        return swap_player(node.active_player)
 
     new_node = node.pick_random_child()
+    if node.is_winner:
+        return node.is_winner
+
     res = sim_rand_game(new_node)
+    new_node.visited()
+    if res == PLAYER:
+        new_node.won()
     return res
 
 
-DBREPTH = 2**11
+DBREPTH = 2**10
 def montecarl(
     player: int,
     boardz: np.array,
@@ -206,17 +212,12 @@ def montecarl(
         while node.fully_expanded():
             node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(3 * math.log(node.visits) / x.visits))
         
-        """if not game_over(node.curr_board, node.state):
-            random_move = random.choice([i for i, x in enumerate(node.state[node.curr_board]) if x == EMPTY and i != 0])
-            new_node = node.make_child(random_move)
-            node = new_node"""
-            
-        node, outcome = sim_rand_game(node)
+        winner = sim_rand_game(node)
 
         while node:
-            node.visits += 1
-            if outcome == player:
-                node.wins += 1
+            node.visited()
+            if winner == player:
+                node.won()
             node = node.parent
     return root
 
