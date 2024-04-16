@@ -19,13 +19,13 @@ class McNode:
         self.visits = visits
         self.curr_board = curr_board
         self.active_player = player
-        self.is_winner = 0
+        self.is_winner = False
 
     def __eq__(self, other: object) -> bool:
         return (self.state == other.state) and (self.curr_board == other.curr_board)
 
     def __str__(self) -> str:
-        return f"wins = {self.wins} visits = {self.visits} curr_board = {self.curr_board}\n children = {self.children}"
+        return f"wins = {self.wins} visits = {self.visits} curr_board = {self.curr_board} is_winner = {self.is_winner} \n children = {self.children}"
 
     def swap_player(self):
         if self.active_player == Players.PLAYER.value:
@@ -44,8 +44,7 @@ class McNode:
         self.visits += 1
 
     def won(self):
-        if self.is_winner != Players.OPPONENT.value: 
-            self.wins += 1
+        self.wins += 1
     
     def pick_random_child(self):
         c = self.get_random_moves()
@@ -67,16 +66,13 @@ class McNode:
         if move == None:
             move = self.get_random_moves()
 
-        child = McNode(deepcopy(self.state), self.curr_board, self.active_player, parent=self, visits=0)
+        child = McNode(deepcopy(self.state), self.curr_board, player=self.active_player, parent=self, visits=0)
         child.place_piece(move)
 
-        # if the child is a winner than the parrent is a loser and vice versa
+        # if the child is a winner than the parrent is a winner
         if child.check_win():
-            self.is_winner = self.active_player
-            child.is_winner = child.get_opposing_player()
+            self.is_winner = True
             self.children = [child]
-            if self.is_winner == Players.OPPONENT.value:
-                self.wins = 0
         else:
             self.children.append(child)
         return child
@@ -99,9 +95,8 @@ class McNode:
             raise Exception("too many children")
         return num_children == num_blank -1
 
-    def check_win(self) -> bool:
+    def check_win_board(self, bd) -> bool:
         p = self.get_opposing_player()
-        bd = self.state[self.curr_board]
         return(  ( bd[1] == p and bd[2] == p and bd[3] == p )
                or( bd[4] == p and bd[5] == p and bd[6] == p )
                or( bd[7] == p and bd[8] == p and bd[9] == p )
@@ -110,6 +105,15 @@ class McNode:
                or( bd[3] == p and bd[6] == p and bd[9] == p )
                or( bd[1] == p and bd[5] == p and bd[9] == p )
                or( bd[3] == p and bd[5] == p and bd[7] == p ))
+
+    def check_win(self) -> bool:
+        if self.parent:
+            return self.check_win_board(self.state[self.parent.curr_board])
+        else:
+            for i in range(1, 10):
+                if self.check_win_board(self.state[i]):
+                    return True
+        return False
 
     def get_opposing_player(self):
         if self.active_player == Players.PLAYER.value:

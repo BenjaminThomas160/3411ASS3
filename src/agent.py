@@ -174,7 +174,7 @@ def alphabeta(
 
 def sim_rand_game( node: McNode ) -> int:
     if node.is_winner:
-        return node.is_winner
+        return node.active_player
     board = node.state[node.curr_board]
     if np.count_nonzero(board != EMPTY) == 9:
         return 0
@@ -191,7 +191,7 @@ def sim_rand_game( node: McNode ) -> int:
     return res
 
 
-DBREPTH = 2**11
+DBREPTH = 2**12
 def montecarl(
     player: int,
     boardz: np.array,
@@ -257,18 +257,9 @@ def play(m: int, r: Optional[McNode]):
     print("best_child: ", best_child)
     best_move = best_child.curr_board
     print(m)
-    for i in best_child.children:
-        print(i.is_winner)
-    n = root
-    print("active players: ")
-    i = 0
-    while n:
-        if n.children:
-            print(i, n.active_player)
-            n = n.children[0]
-        else:
-            break
-        i += 1
+    # for i in best_child.children:
+    #     print(f"c: {i.curr_board}, w: {i.is_winner}, a: {i.active_player} r: {i.check_win()}")
+    #     print_board(i.state)
 
    # root.state.index([x for x in best_child.state if x != boards[curr]][0])
     place(curr, best_move, PLAYER)
