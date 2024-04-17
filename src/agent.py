@@ -12,6 +12,8 @@ from mcnode import McNode
 from copy import deepcopy
 import random
 import math
+import threading
+import queue
 
 # a board cell can hold:
 #   0 - Empty
@@ -190,29 +192,68 @@ def sim_rand_game( node: McNode ) -> int:
         new_node.won()
     return res
 
-
-DBREPTH = 2**12
+DBREPTH = 2**9
 def montecarl(
     player: int,
     boardz: np.array,
     curr_board: int,
+    q: queue.Queue,
     root: Optional[McNode] = None
 ) -> McNode:
-    if not root:
-        root = McNode(deepcopy(boardz), curr_board, player=player)
+
     for _ in range(DBREPTH):
         node = root
         while node.fully_expanded():
-            node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(3 * math.log(node.visits) / x.visits))
-        
-        winner = sim_rand_game(node)
+            node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(2 * math.log(node.visits) / x.visits))
 
+        winner = sim_rand_game(node)
         while node:
             node.visited()
             if winner == node.get_opposing_player():
                 node.won()
             node = node.parent
+    q.put_nowait(root)
     return root
+
+def begin_threading(
+    player: int,
+    boardz: np.array,
+    curr_board: int,
+    q: queue.Queue,
+    root: Optional[McNode]
+):
+    if not root:
+        root = McNode(deepcopy(boardz), curr_board, player=player)
+    print(root)
+    children = root.get_fully_expanded()
+    print(children)
+    if not children:
+        return montecarl(player, boardz, curr_board, q, root)
+    threads = []
+    for child in children:
+        child.set_parent(None)
+        threads.append(threading.Thread(target=montecarl, args=(child.active_player, child.state, child.curr_board, q, child)))
+    print(threads) 
+    for i in threads:
+        i.start()
+ 
+    print("thingo: ")
+    for c in threads:
+        c.join()
+    res = get_most_wins(q)
+    return res
+
+def get_most_wins(q):
+    if q.empty():
+        return -1
+    maxx = float('-inf')
+    while not q.empty():
+        temp = q.get()
+        maxx = max(maxx, temp.wins)
+ 
+    return maxx
+
+
 
 def get_num_moves(b):
     m = 0
@@ -250,13 +291,14 @@ def play(m: int, r: Optional[McNode]):
     global curr_best_child
 #    m = get_num_moves(boards[curr])
     #alphabeta(PLAYER, m, boards, MIN_EVAL, MAX_EVAL, best_move, curr)
-    root = montecarl(PLAYER, deepcopy(boards), curr, r)
+    q = queue.Queue()
+    root = begin_threading(PLAYER, deepcopy(boards), curr, q, r)
     best_child = max(root.children, key=lambda x: x.visits)
     curr_best_child = best_child
-    print("root: ", root)
-    print("best_child: ", best_child)
+    #print("root: ", root)
+    #print("best_child: ", best_child)
     best_move = best_child.curr_board
-    print(m)
+    #print(m)
     # for i in best_child.children:
     #     print(f"c: {i.curr_board}, w: {i.is_winner}, a: {i.active_player} r: {i.check_win()}")
     #     print_board(i.state)
@@ -264,7 +306,7 @@ def play(m: int, r: Optional[McNode]):
    # root.state.index([x for x in best_child.state if x != boards[curr]][0])
     place(curr, best_move, PLAYER)
  #   print(f"board: {curr} move: {best_move} {m}")
-    print(f"bestmove : {best_move}")
+    #print(f"bestmove : {best_move}")
 
     return best_move
     

@@ -85,6 +85,10 @@ class McNode:
             return random.choice([i for i, x in enumerate(self.state[self.curr_board]) if x == Players.EMPTY.value and i != 0])
         return random.choice([i for i, x in enumerate(self.state[self.curr_board]) if x == Players.EMPTY.value and i != 0 and not self.get_move_in_children(i)])
 
+
+    def get_fully_expanded(self):
+        return [i for i in self.children if i.fully_expanded()]
+    
     def set_parent(self, parent) -> None:
         self.parent = parent
 
