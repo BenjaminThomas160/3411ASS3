@@ -40,10 +40,10 @@ MAX_MOVE      = 9
 MIN_EVAL = -1000000
 MAX_EVAL =  1000000
 
-CACHE = './xroot.pkl'
 RUNS = 1
 BREDTH = 2**10
 DEPTH = 10
+MAX_WINS = 2**12
 
 # the boards are of size 10 because index 0 isn't used
 boards = np.zeros((10, 10), dtype="int8")
@@ -159,6 +159,8 @@ def montecarl(
         node = root
         while node.fully_expanded():
             node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(2 * math.log(node.visits) / x.visits))
+        if abs(node.wins) >= MAX_WINS:
+            return root
         
         winner = sim_rand_game(node, 0)
 
@@ -186,10 +188,8 @@ def begin_multiprocessing(
     children = root.get_fully_expanded()
     if not children:
         raise Exception("No children")
-    res = None
-    with p:
-        results = p.map(montecarl_wrapper, root.children)
-        res = max(results, key=lambda x: x.wins / x.visits) 
+    results = p.map(montecarl_wrapper, root.children)
+    res = max(results, key=lambda x: x.wins / x.visits) 
     return res
 
 def get_most_win_percentage(q):
@@ -322,36 +322,37 @@ def main():
     global curr_best_child
     global curr
 
-    p = mp.Pool()
-    print("ready")
+    with mp.Pool(processes=9) as p:
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    port = int(sys.argv[2]) # Usage: ./agent.py -p (port)
-    s.connect(('localhost', port))
-    i = 0
+        print("ready")
 
-    while True:
-        text = s.recv(1024).decode()
-        if not text:
-            continue
-        for line in text.split("\n"):
-            response = parse(p, line)
-            if response == -1:
-                sleep(1)
-                # s.close()
-                # return
-                boards = np.zeros((10, 10), dtype="int8")
-                curr_best_child = None
-                curr = 0
-                i += 1
-                if i == RUNS:
-                    # print("Saving")
-                    # pkl = pickle.dumps(super_root)
-                    # with open(CACHE, "wb+") as f:
-                    #    f.write(pkl)
-                    return
-            elif response > 0:
-                s.sendall((str(response) + "\n").encode())
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        port = int(sys.argv[2]) # Usage: ./agent.py -p (port)
+        s.connect(('localhost', port))
+        i = 0
+
+        while True:
+            text = s.recv(1024).decode()
+            if not text:
+                continue
+            for line in text.split("\n"):
+                response = parse(p, line)
+                if response == -1:
+                    sleep(1)
+                    # s.close()
+                    # return
+                    boards = np.zeros((10, 10), dtype="int8")
+                    curr_best_child = None
+                    curr = 0
+                    i += 1
+                    if i == RUNS:
+                        # print("Saving")
+                        # pkl = pickle.dumps(super_root)
+                        # with open(CACHE, "wb+") as f:
+                        #    f.write(pkl)
+                        return
+                elif response > 0:
+                    s.sendall((str(response) + "\n").encode())
 
 if __name__ == "__main__":
     main()
