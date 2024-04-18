@@ -4,16 +4,15 @@
 #  COMP3411/9814 Artificial Intelligence
 #  CSE, UNSW
 
-import queue
 import socket
 import sys
-import numpy as np
-import multiprocessing as mp
-from time import sleep
-from datetime import datetime
-from typing import Optional
-from mcnode import McNode
 from copy import deepcopy
+from datetime import datetime
+import math
+import multiprocessing as mp
+from typing import Optional
+import numpy as np
+from mcnode import McNode
 
 
 # a board cell can hold:
@@ -81,19 +80,6 @@ def board_won( p, bd ):
            or( bd[1] == p and bd[5] == p and bd[9] == p )
            or( bd[3] == p and bd[5] == p and bd[7] == p ))
 
-def board_nearly_won(p, bd) -> int:
-    o = swap_player(p)
-    return int(
-        max((bd[1] == p) + (bd[2] == p) + (bd[3] == p) - 2*((bd[1] == o) + (bd[2] == o) + (bd[3] == o)), 0) +
-        max((bd[4] == p) + (bd[5] == p) + (bd[6] == p) - 2*((bd[4] == o) + (bd[5] == o) + (bd[6] == o)), 0) +
-        max((bd[7] == p) + (bd[8] == p) + (bd[9] == p) - 2*((bd[7] == o) + (bd[8] == o) + (bd[9] == o)), 0) +
-        max((bd[1] == p) + (bd[4] == p) + (bd[7] == p) - 2*((bd[1] == o) + (bd[4] == o) + (bd[7] == o)), 0) +
-        max((bd[2] == p) + (bd[5] == p) + (bd[8] == p) - 2*((bd[2] == o) + (bd[5] == o) + (bd[8] == o)), 0) +
-        max((bd[3] == p) + (bd[6] == p) + (bd[9] == p) - 2*((bd[3] == o) + (bd[6] == o) + (bd[9] == o)), 0) +
-        max((bd[1] == p) + (bd[5] == p) + (bd[9] == p) - 2*((bd[3] == o) + (bd[6] == o) + (bd[9] == o)), 0) +
-        max((bd[3] == p) + (bd[5] == p) + (bd[7] == p) - 2*((bd[3] == o) + (bd[5] == o) + (bd[7] == o)), 0)
-    )
-
 def game_won( player: int, boardz: np.array ) -> bool:
     for b in range(1,len(boardz)):
         if board_won(player, boardz[b]):
@@ -112,13 +98,6 @@ def swap_player(p):
         return OPPONENT
     return PLAYER
 
-def heuristic(player: int, boardz: np.array) -> int:
-    out = 0
-    for i in range(1,10):
-        board_heuristic = np.count_nonzero(boardz[i] == player) - np.count_nonzero(boardz[i] == swap_player(player))
-        out += board_heuristic**5
-    return out
-        
 def sim_rand_game(node: McNode , m: int) -> int:
     if m >= DEPTH:
         return 0
@@ -128,7 +107,7 @@ def sim_rand_game(node: McNode , m: int) -> int:
     board = node.state[node.curr_board]
     if np.count_nonzero(board != EMPTY) == 9:
         return 0
-    
+
     if node.check_win():
         return node.get_opposing_player()
 
@@ -157,7 +136,10 @@ def montecarl(
         if abs(node.wins) >= MAX_WINS:
             return root
         while node.fully_expanded():
-            node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(2 * math.log(node.visits) / x.visits))
+            node = max(
+                node.children, key=lambda x: x.wins / x.visits
+                + math.sqrt(2 * math.log(node.visits) / x.visits)
+            )
 
         winner = sim_rand_game(node, 0)
 
@@ -186,7 +168,7 @@ def begin_multiprocessing(
     if not children:
         raise Exception("No children")
     results = p.map(montecarl_wrapper, root.children)
-    res = max(results, key=lambda x: x.wins / x.visits) 
+    res = max(results, key=lambda x: x.wins / x.visits)
     return res
 
 def get_most_win_percentage(q):
@@ -209,42 +191,17 @@ def get_num_moves(b):
             m += 1
     return m
 
-def make_move( player, m, move, board ):
-    if board[move[m]] != EMPTY:
-        print('Illegal Move')
-        return ILLEGAL_MOVE
-    else:
-        board[move[m]] = player
-        if game_won( player, board ):
-            return WIN
-        elif full_board( board ):
-            return DRAW
-        else:
-            return STILL_PLAYING
-
-def full_board( board ):
-    b = 1
-    while b <= 9 and board[b] != EMPTY:
-        b += 1
-    return( b == 10 )
-
-
-
 #best_move = np.zeros(81,dtype=np.int32)
 curr_best_child: Optional[McNode] = None
-move = 0
 # choose a move to play
-def play(m: int, p: mp.Pool, r: Optional[McNode] = None):
+def play(p: mp.Pool, r: Optional[McNode] = None):
     global curr_best_child
     best_child = begin_multiprocessing(PLAYER, deepcopy(boards), curr, p, r)
     curr_best_child = best_child
-
     best_move = best_child.curr_board
     place(curr, best_move, PLAYER)
-    print(f"bestmove {m}: {best_move}, visited: {best_child.visits}, wins: {best_child.wins}")
-
     return best_move
-    
+
 # place a move in the global boards
 def place( board, num, player ):
     global curr
@@ -275,8 +232,7 @@ def parse(p: mp.Pool, string: str):
         # place the first move (randomly generated for opponent)
         place(int(args[0]), int(args[1]), 2)
         # curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
-        move = 1
-        return play(1, p)  # choose and return the second move
+        return play(p)  # choose and return the second move
 
     # third_move(K,L,M) means that the first and second move were
     # in square L of sub-board K, and square M of sub-board L,
@@ -288,8 +244,7 @@ def parse(p: mp.Pool, string: str):
         # place the second move (chosen by opponent)
         place(curr, int(args[2]), 2)
         # root = curr_best_child.make_child(move=int(args[2]))
-        move = 2
-        return play(2, p) # choohe and return the third move
+        return play(p) # choohe and return the third move
 
     # nex_move(M) means that the previous move was into
     # square M of the designated sub-board,
@@ -298,8 +253,7 @@ def parse(p: mp.Pool, string: str):
         # place the previous move (chosen by opponent)
         place(curr, int(args[0]), 2)
         root = curr_best_child.make_child(move=int(args[0]))
-        move += 2
-        return play(move, p, root) # choose and return our next move
+        return play(p, root) # choose and return our next move
 
     elif command == "win":
         print("Yay!! We win!! :)")
