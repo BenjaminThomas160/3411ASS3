@@ -131,7 +131,6 @@ def montecarl(
     if not root:
         root = McNode(deepcopy(boardz), curr_board, player=player)
     while (datetime.now() - start_time).total_seconds() < TIME_SIMULATING:
-    #for _ in range(BREDTH):
         node = root
         if abs(node.wins) >= MAX_WINS:
             return root
@@ -191,7 +190,6 @@ def get_num_moves(b):
             m += 1
     return m
 
-#best_move = np.zeros(81,dtype=np.int32)
 curr_best_child: Optional[McNode] = None
 # choose a move to play
 def play(p: mp.Pool, r: Optional[McNode] = None):
@@ -231,7 +229,6 @@ def parse(p: mp.Pool, string: str):
     if command == "second_move":
         # place the first move (randomly generated for opponent)
         place(int(args[0]), int(args[1]), 2)
-        # curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
         return play(p)  # choose and return the second move
 
     # third_move(K,L,M) means that the first and second move were
@@ -240,7 +237,6 @@ def parse(p: mp.Pool, string: str):
     elif command == "third_move":
         # place the first move (randomly generated for us)
         place(int(args[0]), int(args[1]), 1)
-        # curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
         # place the second move (chosen by opponent)
         place(curr, int(args[2]), 2)
         # root = curr_best_child.make_child(move=int(args[2]))
@@ -290,21 +286,14 @@ def main():
                 start_time = datetime.now()
                 response = parse(p, line)
                 if response == -1:
-                    # s.close()
-                    # return
                     boards = np.zeros((10, 10), dtype="int8")
                     curr_best_child = None
                     curr = 0
                     i += 1
                     if i == RUNS:
-                        # print("Saving")
-                        # pkl = pickle.dumps(super_root)
-                        # with open(CACHE, "wb+") as f:
-                        #    f.write(pkl)
                         return
                 elif response > 0:
                     s.sendall((str(response) + "\n").encode())
-                    print(f"time taken {datetime.now() - start_time}")
 
 if __name__ == "__main__":
     main()
