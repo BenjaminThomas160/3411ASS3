@@ -6,16 +6,12 @@
 
 import socket
 import sys
-from time import sleep
-from datetime import datetime
 from typing import Optional
 import numpy as np
 from mcnode import McNode
 from copy import deepcopy
+import random
 import math
-import pickle
-import os
-
 
 # a board cell can hold:
 #   0 - Empty
@@ -23,8 +19,8 @@ import os
 #   2 - Opponent played here
 
 EMPTY = 0
-PLAYER = 1
-OPPONENT = 2
+PLAYER = 2
+OPPONENT = 1
 
 ILLEGAL_MOVE  = 0
 STILL_PLAYING = 1
@@ -37,17 +33,10 @@ MAX_MOVE      = 9
 MIN_EVAL = -1000000
 MAX_EVAL =  1000000
 
-CACHE = './xroot.pkl'
-RUNS = 1
-BREDTH = 2**12
-DEPTH = 20
-
 # the boards are of size 10 because index 0 isn't used
 boards = np.zeros((10, 10), dtype="int8")
 s = [".","X","O"]
 curr = 0 # this is the current board to play in
-total_wins = 0
-
 
 # print a row
 def print_board_row(bd, a, b, c, i, j, k):
@@ -70,6 +59,13 @@ def print_board(board):
     print_board_row(board, 7,8,9,7,8,9)
     print()
 
+def map_to_board(a,b):
+    s = 0
+    if a == 1:
+        s == 4
+    elif a == 2:
+        s == 7
+    return s + b
 
 def board_won( p, bd ):
     return(  ( bd[1] == p and bd[2] == p and bd[3] == p )
@@ -94,17 +90,10 @@ def board_nearly_won(p, bd) -> int:
         max((bd[3] == p) + (bd[5] == p) + (bd[7] == p) - 2*((bd[3] == o) + (bd[5] == o) + (bd[7] == o)), 0)
     )
 
-def game_won( player: int, boardz: np.array ) -> bool:
-    for b in range(1,len(boardz)):
-        if board_won(player, boardz[b]):
+def game_won( player, boards ):
+    for b in range(1,len(boards)):
+        if board_won(player, boards[b]):
             return True
-    return False
-
-def game_over( curr_board: np.array, boardz: np.array ) -> bool:
-    if game_won(PLAYER, boardz) or game_won(OPPONENT, boardz):
-        return True
-    if np.count_nonzero(boardz[curr_board] != EMPTY) == 9:
-        return False
     return False
 
 def swap_player(p):
@@ -112,62 +101,96 @@ def swap_player(p):
         return OPPONENT
     return PLAYER
 
-def heuristic(player: int, boardz: np.array) -> int:
+abcache = {}
+
+def ab_to_hash(
+    player: int,
+    boards: np.array,
+    alpha: int,
+    beta: int,
+    curr_board: int
+) -> str:
+    return f"{player},{boards.tobytes()},{alpha},{beta},{curr_board}"
+
+def heuristic(player: int, boards: np.array) -> int:
     out = 0
     for i in range(1,10):
-        board_heuristic = np.count_nonzero(boardz[i] == player) - np.count_nonzero(boardz[i] == swap_player(player))
+        board_heuristic = np.count_nonzero(boards[i] == player) - np.count_nonzero(boards[i] == swap_player(player))
+        out += board_heuristic**3
+    return out
+    """
+    out = 0
+    for i in range(1,10):
+        board_heuristic = board_nearly_won(player, boards[i]) - board_nearly_won(swap_player(player), boards[i])
         out += board_heuristic**5
     return out
+    """
         
-def sim_rand_game(node: McNode , m: int) -> int:
-    if m >= DEPTH:
-        return 0
-    if node.is_winner:
-        return node.active_player
 
+
+def alphabeta(
+    player: int,
+    m: int,
+    boards: np.array,
+    alpha: int,
+    beta: int,
+    best_move: tuple[int,int],
+    curr_board: int
+) -> int:
+    #if ab_to_hash(player, boards, alpha, beta, curr_board) in abcache:
+    #    return abcache[ab_to_hash(player, boards, alpha, beta, curr_board)]
+    
+    board = boards[curr_board] 
+    best_eval = MIN_EVAL
+
+    if game_won( swap_player(player), boards ):   # LOSS
+        return -1000 + m  # better to win faster (or lose slower)
+    
+    if m - move == 7:
+        h = heuristic(player, boards)
+        return h - m
+
+    this_move = 0
+    for r in range(1, 10):
+        if board[r] == EMPTY:         # move is legal
+
+            this_move = r
+            board[this_move] = player # make move
+            this_eval = -alphabeta(swap_player(player), m+1, deepcopy(boards), -beta, -alpha, best_move, this_move)
+    #        abcache[ab_to_hash(swap_player(player), boards, -beta, -alpha, this_move)] = -this_eval
+            board[this_move] = EMPTY  # undo move
+            if this_eval > best_eval:
+                best_move[m] = this_move
+                best_eval = this_eval
+                if best_eval > alpha:
+                    alpha = best_eval
+                    if alpha >= beta: # cutoff
+                        return( alpha )
+
+    if this_move == 0:  # no legal moves
+        return( 0 )     # DRAW
+    else:
+        return( alpha )
+
+def sim_rand_game(player, node):
     board = node.state[node.curr_board]
     if np.count_nonzero(board != EMPTY) == 9:
         return 0
-    
-    if node.check_win():
-        return node.get_opposing_player()
+    child_board = node.state.copy()
+    random_move = random.choice([i for i, x in enumerate(child_board[node.curr_board]) if x == EMPTY and i != 0])
+    child_board[node.curr_board][random_move] = player
+    new_node = McNode(child_board, random_move, parent=node)
+    check_existing = list(filter(lambda x: x == new_node, node.children))
+    if check_existing:
+        new_node = check_existing[0]
+    else:
+        node.children.append(new_node) 
+    if game_won(player, new_node.state):
+        return player
+    else:
+        sim_rand_game(swap_player(player), new_node)
 
-    new_node = node.pick_random_child()
 
-    res = sim_rand_game(new_node, m+1)
-    new_node.visited()
-    if res == new_node.get_opposing_player():
-        new_node.won()
-    elif res == new_node.active_player:
-        new_node.loss()
-    return res
-
-
-def montecarl(
-    player: int,
-    boardz: np.array,
-    curr_board: int,
-    root: Optional[McNode] = None
-) -> McNode:
-    # start_time = datetime.now()
-    if not root:
-        root = McNode(deepcopy(boardz), curr_board, player=player)
-    # while (datetime.now() - start_time).total_seconds() < 2.5:
-    for _ in range(BREDTH):
-        node = root
-        while node.fully_expanded():
-            node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(2 * math.log(node.visits) / x.visits))
-        
-        winner = sim_rand_game(node, 0)
-
-        while node is not root.parent:
-            node.visited()
-            if winner == node.get_opposing_player():
-                node.won()
-            elif winner == node.active_player:
-                node.loss()
-            node = node.parent
-    return root
 
 def get_num_moves(b):
     m = 0
@@ -197,22 +220,21 @@ def full_board( board ):
 
 
 
-#best_move = np.zeros(81,dtype=np.int32)
-curr_best_child: Optional[McNode] = None
+best_move = np.zeros(81,dtype=np.int32)
 move = 0
 # choose a move to play
-def play(m: int, r: Optional[McNode]):
-    global curr_best_child
-    root = montecarl(PLAYER, deepcopy(boards), curr, r)
+def play(m):
+#    m = get_num_moves(boards[curr])
+    alphabeta(PLAYER, m, boards, MIN_EVAL, MAX_EVAL, best_move, curr)
+    #root = montecarl(PLAYER, boards, curr)
+    #best_child = max(root.children, key=lambda x: x.visits)
+    #best_move = best_child.curr_board
+   # root.state.index([x for x in best_child.state if x != boards[curr]][0])
+    place(curr, best_move[m], PLAYER)
+ #   print(f"board: {curr} move: {best_move} {m}")
+    print(f"bestmove : {best_move}")
 
-    best_child = max(root.children, key=lambda x: x.visits)
-    curr_best_child = best_child
-
-    best_move = best_child.curr_board
-    place(curr, best_move, PLAYER)
-    print(f"bestmove {m}: {best_move}, visited: {best_child.visits}, wins: {best_child.wins}")
-
-    return best_move
+    return best_move[m]
     
 # place a move in the global boards
 def place( board, num, player ):
@@ -222,9 +244,8 @@ def place( board, num, player ):
 
 # read what the server sent us and
 # parse only the strings that are necessary
-def parse(r: McNode, string: str):
+def parse(string):
     global move
-    global curr_best_child
     if "(" in string:
         command, args = string.split("(")
         args = args.split(")")[0]
@@ -243,9 +264,8 @@ def parse(r: McNode, string: str):
     if command == "second_move":
         # place the first move (randomly generated for opponent)
         place(int(args[0]), int(args[1]), 2)
-        curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
         move = 1
-        return play(1, curr_best_child)  # choose and return the second move
+        return play(1)  # choose and return the second move
 
     # third_move(K,L,M) means that the first and second move were
     # in square L of sub-board K, and square M of sub-board L,
@@ -253,12 +273,10 @@ def parse(r: McNode, string: str):
     elif command == "third_move":
         # place the first move (randomly generated for us)
         place(int(args[0]), int(args[1]), 1)
-        curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
         # place the second move (chosen by opponent)
         place(curr, int(args[2]), 2)
-        root = curr_best_child.make_child(move=int(args[2]))
         move = 2
-        return play(2, root) # choohe and return the third move
+        return play(2) # choose and return the third move
 
     # nex_move(M) means that the previous move was into
     # square M of the designated sub-board,
@@ -266,14 +284,11 @@ def parse(r: McNode, string: str):
     elif command == "next_move":
         # place the previous move (chosen by opponent)
         place(curr, int(args[0]), 2)
-        root = curr_best_child.make_child(move=int(args[0]))
         move += 2
-        return play(move, root) # choose and return our next move
+        return play(move) # choose and return our next move
 
     elif command == "win":
         print("Yay!! We win!! :)")
-        global total_wins
-        total_wins += 1
         return -1
 
     elif command == "loss":
@@ -284,43 +299,19 @@ def parse(r: McNode, string: str):
 
 # connect to socket
 def main():
-    global boards
-    global curr_best_child
-    global curr
-
-    if os.path.isfile(CACHE):
-        with open(CACHE, "rb") as f:
-            super_root = pickle.loads(f.read())
-    else:
-        super_root = McNode(deepcopy(boards), PLAYER)
-    print("ready")
-
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     port = int(sys.argv[2]) # Usage: ./agent.py -p (port)
-    s.connect(('localhost', port))
-    i = 0
 
+    s.connect(('localhost', port))
     while True:
         text = s.recv(1024).decode()
         if not text:
             continue
         for line in text.split("\n"):
-            response = parse(super_root, line)
+            response = parse(line)
             if response == -1:
-                sleep(1)
-                # s.close()
-                # return
-                boards = np.zeros((10, 10), dtype="int8")
-                curr_best_child = None
-                curr = 0
-                i += 1
-                print(f"game: {i}, wins: {total_wins}")
-                if i == RUNS:
-                    # print("Saving")
-                    # pkl = pickle.dumps(super_root)
-                    # with open(CACHE, "wb+") as f:
-                    #    f.write(pkl)
-                    return
+                s.close()
+                return
             elif response > 0:
                 s.sendall((str(response) + "\n").encode())
 

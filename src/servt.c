@@ -241,7 +241,7 @@ void play_games( int num_games, int move[] )
     player = first_player;
     game_status = make_move( player,m,move,board );
     while( m < MAX_MOVE && game_status == STILL_PLAYING ) {
-      //print_board( stdout,board,move[m-1],move[m] );
+      print_board( stdout,board,move[m-1],move[m] );
       m++;
       player = !player;
       if( is_human[player] ) {
