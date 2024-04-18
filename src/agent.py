@@ -336,9 +336,9 @@ def main():
             if not text:
                 continue
             for line in text.split("\n"):
+                start_time = datetime.now()
                 response = parse(p, line)
                 if response == -1:
-                    sleep(1)
                     # s.close()
                     # return
                     boards = np.zeros((10, 10), dtype="int8")
@@ -353,6 +353,7 @@ def main():
                         return
                 elif response > 0:
                     s.sendall((str(response) + "\n").encode())
+                    print(f"time taken {datetime.now() - start_time}")
 
 if __name__ == "__main__":
     main()
