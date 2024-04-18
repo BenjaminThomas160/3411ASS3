@@ -45,6 +45,9 @@ class McNode:
 
     def won(self):
         self.wins += 1
+
+    def loss(self):
+        self.wins -= 1
     
     def pick_random_child(self):
         c = self.get_random_moves()
@@ -59,14 +62,16 @@ class McNode:
                 return child
         return None
 
-    def make_child(self, move: Optional[int] = None):
+    def make_child(self, move: Optional[int] = None, bd: Optional[int] = None):
         # no point making more children if one is a winner
         if self.is_winner:
             return self.children[0]
         if move == None:
             move = self.get_random_moves()
-
-        child = McNode(deepcopy(self.state), self.curr_board, player=self.active_player, parent=self, visits=0)
+        child = self.get_move_in_children(move)
+        if child and not bd:
+            return child
+        child = McNode(deepcopy(self.state), bd or self.curr_board, player=self.active_player, parent=self, visits=0)
         child.place_piece(move)
 
         # if the child is a winner than the parrent is a winner
