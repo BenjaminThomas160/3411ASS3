@@ -178,7 +178,7 @@ def begin_multiprocessing(
     player: int,
     boardz: np.array,
     curr_board: int,
-    q: mp.Queue,
+    p: mp.Pool,
     root: Optional[McNode]
 ) -> McNode:
     if not root:
@@ -186,7 +186,6 @@ def begin_multiprocessing(
     children = root.get_fully_expanded()
     if not children:
         raise Exception("No children")
-    p = mp.Pool(len(children))
     res = None
     with p:
         results = p.map(montecarl_wrapper, root.children)
@@ -238,11 +237,9 @@ def full_board( board ):
 curr_best_child: Optional[McNode] = None
 move = 0
 # choose a move to play
-def play(m: int, r: Optional[McNode]):
+def play(m: int, p: mp.Pool, r: Optional[McNode] = None):
     global curr_best_child
-    q = mp.Queue()
-    best_child = begin_multiprocessing(PLAYER, deepcopy(boards), curr, q, r)
-    print(best_child)
+    best_child = begin_multiprocessing(PLAYER, deepcopy(boards), curr, p, r)
     curr_best_child = best_child
 
     best_move = best_child.curr_board
@@ -259,7 +256,7 @@ def place( board, num, player ):
 
 # read what the server sent us and
 # parse only the strings that are necessary
-def parse(r: McNode, string: str):
+def parse(p: mp.Pool, string: str):
     global move
     global curr_best_child
     if "(" in string:
@@ -282,7 +279,7 @@ def parse(r: McNode, string: str):
         place(int(args[0]), int(args[1]), 2)
         # curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
         move = 1
-        return play(1, None)  # choose and return the second move
+        return play(1, p)  # choose and return the second move
 
     # third_move(K,L,M) means that the first and second move were
     # in square L of sub-board K, and square M of sub-board L,
@@ -295,7 +292,7 @@ def parse(r: McNode, string: str):
         place(curr, int(args[2]), 2)
         # root = curr_best_child.make_child(move=int(args[2]))
         move = 2
-        return play(2, None) # choohe and return the third move
+        return play(2, p) # choohe and return the third move
 
     # nex_move(M) means that the previous move was into
     # square M of the designated sub-board,
@@ -305,7 +302,7 @@ def parse(r: McNode, string: str):
         place(curr, int(args[0]), 2)
         root = curr_best_child.make_child(move=int(args[0]))
         move += 2
-        return play(move, root) # choose and return our next move
+        return play(move, p, root) # choose and return our next move
 
     elif command == "win":
         print("Yay!! We win!! :)")
@@ -325,11 +322,7 @@ def main():
     global curr_best_child
     global curr
 
-    if os.path.isfile(CACHE):
-        with open(CACHE, "rb") as f:
-            super_root = pickle.loads(f.read())
-    else:
-        super_root = McNode(deepcopy(boards), PLAYER)
+    p = mp.Pool()
     print("ready")
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -342,7 +335,7 @@ def main():
         if not text:
             continue
         for line in text.split("\n"):
-            response = parse(super_root, line)
+            response = parse(p, line)
             if response == -1:
                 sleep(1)
                 # s.close()
