@@ -15,9 +15,9 @@ from mcnode import McNode
 from copy import deepcopy
 import math
 import threading
-from queue import Queue
 import pickle
 import os
+import multiprocessing as mp
 
 
 # a board cell can hold:
@@ -42,8 +42,8 @@ MAX_EVAL =  1000000
 
 CACHE = './xroot.pkl'
 RUNS = 1
-BREDTH = 2**12
-DEPTH = 20
+BREDTH = 2**10
+DEPTH = 10
 
 # the boards are of size 10 because index 0 isn't used
 boards = np.zeros((10, 10), dtype="int8")
@@ -149,14 +149,13 @@ def montecarl(
     player: int,
     boardz: np.array,
     curr_board: int,
-    q: queue.Queue,
     root: Optional[McNode] = None
 ) -> McNode:
-    # start_time = datetime.now()
+    start_time = datetime.now()
     if not root:
         root = McNode(deepcopy(boardz), curr_board, player=player)
-    # while (datetime.now() - start_time).total_seconds() < 2.5:
-    for _ in range(BREDTH):
+    while (datetime.now() - start_time).total_seconds() < 2:
+    #for _ in range(BREDTH):
         node = root
         while node.fully_expanded():
             node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(2 * math.log(node.visits) / x.visits))
@@ -170,46 +169,42 @@ def montecarl(
             elif winner == node.active_player:
                 node.loss()
             node = node.parent
-    q.put_nowait(root)
     return root
 
-def begin_threading(
+def montecarl_wrapper(root):
+    return montecarl(root.active_player, root.state, root.curr_board)
+
+def begin_multiprocessing(
     player: int,
     boardz: np.array,
     curr_board: int,
-    q: queue.Queue,
+    q: mp.Queue,
     root: Optional[McNode]
-):
+) -> McNode:
     if not root:
         root = McNode(deepcopy(boardz), curr_board, player=player)
-    print(root)
     children = root.get_fully_expanded()
-    print(children)
     if not children:
-        return montecarl(player, boardz, curr_board, q, root)
-    threads = []
-    for child in children:
-        child.set_parent(None)
-        threads.append(threading.Thread(target=montecarl, args=(child.active_player, child.state, child.curr_board, q, child)))
-    print(threads) 
-    for i in threads:
-        i.start()
- 
-    print("thingo: ")
-    for c in threads:
-        c.join()
-    res = get_most_wins(q)
+        raise Exception("No children")
+    p = mp.Pool(len(children))
+    res = None
+    with p:
+        results = p.map(montecarl_wrapper, root.children)
+        res = max(results, key=lambda x: x.wins / x.visits) 
     return res
 
-def get_most_wins(q):
+def get_most_win_percentage(q):
     if q.empty():
         return -1
-    maxx = float('-inf')
+    max_node = q.get()
+    max_val = max_node.wins / max_node.visits
     while not q.empty():
         temp = q.get()
-        maxx = max(maxx, temp.wins)
- 
-    return maxx
+        new_val = temp.wins / temp.visits
+        if max_val < new_val:
+            max_node = temp
+            max_val = new_val
+    return max_node
 
 def get_num_moves(b):
     m = 0
@@ -245,9 +240,9 @@ move = 0
 # choose a move to play
 def play(m: int, r: Optional[McNode]):
     global curr_best_child
-    root = montecarl(PLAYER, deepcopy(boards), curr, r)
-
-    best_child = max(root.children, key=lambda x: x.visits)
+    q = mp.Queue()
+    best_child = begin_multiprocessing(PLAYER, deepcopy(boards), curr, q, r)
+    print(best_child)
     curr_best_child = best_child
 
     best_move = best_child.curr_board
@@ -285,9 +280,9 @@ def parse(r: McNode, string: str):
     if command == "second_move":
         # place the first move (randomly generated for opponent)
         place(int(args[0]), int(args[1]), 2)
-        curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
+        # curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
         move = 1
-        return play(1, curr_best_child)  # choose and return the second move
+        return play(1, None)  # choose and return the second move
 
     # third_move(K,L,M) means that the first and second move were
     # in square L of sub-board K, and square M of sub-board L,
@@ -295,12 +290,12 @@ def parse(r: McNode, string: str):
     elif command == "third_move":
         # place the first move (randomly generated for us)
         place(int(args[0]), int(args[1]), 1)
-        curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
+        # curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
         # place the second move (chosen by opponent)
         place(curr, int(args[2]), 2)
-        root = curr_best_child.make_child(move=int(args[2]))
+        # root = curr_best_child.make_child(move=int(args[2]))
         move = 2
-        return play(2, root) # choohe and return the third move
+        return play(2, None) # choohe and return the third move
 
     # nex_move(M) means that the previous move was into
     # square M of the designated sub-board,
@@ -356,7 +351,6 @@ def main():
                 curr_best_child = None
                 curr = 0
                 i += 1
-                print(f"game: {i}, wins: {total_wins}")
                 if i == RUNS:
                     # print("Saving")
                     # pkl = pickle.dumps(super_root)

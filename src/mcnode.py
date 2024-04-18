@@ -92,7 +92,11 @@ class McNode:
 
 
     def get_fully_expanded(self):
-        return [i for i in self.children if i.fully_expanded()]
+        for i, m in enumerate(self.state[self.curr_board]):
+            if m == Players.EMPTY.value and i != 0:
+                # note: make child will not make new children if they already exist
+                self.make_child(move=i)
+        return self.children
     
     def set_parent(self, parent) -> None:
         self.parent = parent
