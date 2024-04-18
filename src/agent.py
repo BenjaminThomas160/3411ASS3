@@ -7,17 +7,13 @@
 import queue
 import socket
 import sys
+import numpy as np
+import multiprocessing as mp
 from time import sleep
 from datetime import datetime
 from typing import Optional
-import numpy as np
 from mcnode import McNode
 from copy import deepcopy
-import math
-import threading
-import pickle
-import os
-import multiprocessing as mp
 
 
 # a board cell can hold:
@@ -43,7 +39,8 @@ MAX_EVAL =  1000000
 RUNS = 1
 BREDTH = 2**10
 DEPTH = 10
-MAX_WINS = 2**12
+MAX_WINS = 2**11
+TIME_SIMULATING = 2.2
 
 # the boards are of size 10 because index 0 isn't used
 boards = np.zeros((10, 10), dtype="int8")
@@ -154,14 +151,14 @@ def montecarl(
     start_time = datetime.now()
     if not root:
         root = McNode(deepcopy(boardz), curr_board, player=player)
-    while (datetime.now() - start_time).total_seconds() < 2:
+    while (datetime.now() - start_time).total_seconds() < TIME_SIMULATING:
     #for _ in range(BREDTH):
         node = root
-        while node.fully_expanded():
-            node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(2 * math.log(node.visits) / x.visits))
         if abs(node.wins) >= MAX_WINS:
             return root
-        
+        while node.fully_expanded():
+            node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(2 * math.log(node.visits) / x.visits))
+
         winner = sim_rand_game(node, 0)
 
         while node is not root.parent:
