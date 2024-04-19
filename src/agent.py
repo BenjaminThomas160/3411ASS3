@@ -50,12 +50,28 @@ total_wins = 0
 
 # print a row
 def print_board_row(bd, a, b, c, i, j, k):
+    """Prints a row of the board
+
+    Args:
+        bd (np.array): the entire board
+        a (int): A location in the row 
+        b (int): A location in the row
+        c (int): A location in the row
+        i (int): A location in the row
+        j (int): A location in the row
+        k (int): A location in the row
+    """
     print(" "+s[bd[a][i]]+" "+s[bd[a][j]]+" "+s[bd[a][k]]+" | " \
              +s[bd[b][i]]+" "+s[bd[b][j]]+" "+s[bd[b][k]]+" | " \
              +s[bd[c][i]]+" "+s[bd[c][j]]+" "+s[bd[c][k]])
 
 # Print the entire board
 def print_board(board):
+    """Prints the entire board
+
+    Args:
+        board (np.array): the board
+    """
     print_board_row(board, 1,2,3,1,2,3)
     print_board_row(board, 1,2,3,4,5,6)
     print_board_row(board, 1,2,3,7,8,9)
@@ -71,6 +87,12 @@ def print_board(board):
 
 
 def board_won( p, bd ):
+    """returns bool if a single board won or not
+
+    Args:
+        p (int): The player
+        bd (np.array): The board
+    """
     return(  ( bd[1] == p and bd[2] == p and bd[3] == p )
            or( bd[4] == p and bd[5] == p and bd[6] == p )
            or( bd[7] == p and bd[8] == p and bd[9] == p )
@@ -81,12 +103,30 @@ def board_won( p, bd ):
            or( bd[3] == p and bd[5] == p and bd[7] == p ))
 
 def game_won( player: int, boardz: np.array ) -> bool:
+    """Returns whether the game is won
+
+    Args:
+        player (int): The active player
+        boardz (np.array): The entire board
+
+    Returns:
+        bool: If the game is won or not
+    """
     for b in range(1,len(boardz)):
         if board_won(player, boardz[b]):
             return True
     return False
 
 def game_over( curr_board: np.array, boardz: np.array ) -> bool:
+    """Determines if the game is complete
+
+    Args:
+        curr_board (np.array): The current board
+        boardz (np.array): The entire board
+
+    Returns:
+        bool: whether the game is over or not
+    """
     if game_won(PLAYER, boardz) or game_won(OPPONENT, boardz):
         return True
     if np.count_nonzero(boardz[curr_board] != EMPTY) == 9:
@@ -94,13 +134,30 @@ def game_over( curr_board: np.array, boardz: np.array ) -> bool:
     return False
 
 def swap_player(p):
+    """Swaps the player
+
+    Args:
+        p (int): The current player
+
+    Returns:
+        Int: The other player 
+    """
     if p == PLAYER:
         return OPPONENT
     return PLAYER
 
 def sim_rand_game(node: McNode , m: int) -> int:
+    """Simulates a random game
+
+    Args:
+        node (McNode): The current node in the tree
+        m (int): the current move
+
+    Returns:
+        int: The player who won, or a DRAW
+    """
     if m >= DEPTH:
-        return 0
+        return DRAW
     if node.is_winner:
         return node.active_player
 
@@ -127,6 +184,17 @@ def montecarl(
     curr_board: int,
     root: Optional[McNode] = None
 ) -> McNode:
+    """Does the MonteCarlo Tree Search algorithm
+
+    Args:
+        player (int): The current player
+        boardz (np.array): The entire board
+        curr_board (int): The current subboard
+        root (Optional[McNode], optional): The current root node. Defaults to None.
+
+    Returns:
+        McNode: The node with the most visits
+    """
     start_time = datetime.now()
     if not root:
         root = McNode(deepcopy(boardz), curr_board, player=player)
@@ -152,6 +220,14 @@ def montecarl(
     return root
 
 def montecarl_wrapper(root):
+    """wrapper around montecarl for multiprocessing
+
+    Args:
+        root (McNode): The root node to hand to montecarl
+
+    Returns:
+        McNode: The node with the most visits
+    """
     return montecarl(root.active_player, root.state, root.curr_board)
 
 def begin_multiprocessing(
@@ -161,6 +237,21 @@ def begin_multiprocessing(
     p: mp.Pool,
     root: Optional[McNode]
 ) -> McNode:
+    """Does the multiprocessing logic
+
+    Args:
+        player (int): The current player
+        boardz (np.array): The entire board
+        curr_board (int): The current subboard
+        p (mp.Pool): The processing pool
+        root (Optional[McNode]): The first root node
+
+    Raises:
+        Exception: no children
+
+    Returns:
+        McNode: The node with the highest win %
+    """
     if not root:
         root = McNode(deepcopy(boardz), curr_board, player=player)
     children = root.get_fully_expanded()
@@ -191,8 +282,17 @@ def get_num_moves(b):
     return m
 
 curr_best_child: Optional[McNode] = None
-# choose a move to play
+
 def play(p: mp.Pool, r: Optional[McNode] = None):
+    """Choose a move to play
+
+    Args:
+        p (mp.Pool): The processing pool
+        r (Optional[McNode], optional): Optional root node. Defaults to None.
+
+    Returns:
+        Int: The best move
+    """
     global curr_best_child
     best_child = begin_multiprocessing(PLAYER, deepcopy(boards), curr, p, r)
     curr_best_child = best_child
