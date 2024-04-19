@@ -1,0 +1,28 @@
+"""
+Briefly describe how your program works, including any algorithms and data structures employed,
+and explain any design decisions you made along the way.
+
+Our algorithm employs the Monte Carlo Tree Search algorithm to make the best possible move.
+We initially attempted to solve the problem using an alpha-beta pruning approach, however 
+we ran into many problems.
+
+To implement the Monte Carlo tree search algorithm, we use an object called 'McNode', (short for MonteCarloNode),
+each one of these essentially represents a different possible game state, and then has more game states in its children.
+When the code is run, it begins multiprocessing using a process Pool, this is to improve the speed by using multiple cpu cores,
+it then calls 'begin_multiprocessing' which then fully expands the children in the root, and calls montcarl_wrapper on different processes
+for each child of the root node.
+montecarl is then called by montecarl_wrapper, this starts a timer for how long the algorithm gets to simulate random games for, currently
+we have it set to 2.2 seconds.
+
+The montecarl function then selects a node from the children of the node passed into montecarl, based off of the mathematical formula of 
+the montecarlo tree search w/n + c*sqrt(ln(N)/n), w is the number of wins for the node, n is the number of visits for the node, N is
+the number of visits to the parent node, and c controls how much exploration the algorithm will do, higher values meaning more exploration
+
+It then checks if the absolute value of the number of wins in this node is greater than a constant 'MAX_WINS', if it is, then we just return the 
+node, this allows us to win faster once we get over a threshold of number of wins in a node.
+
+Using this node, it then calls sim_rand_game, which visits/simulates a random game based off of the node we pass in up until a specified depth.
+It then returns the winner, and we then backpropogate adding visits and wins or losses to the node based off of the winner.
+The node is then returned and then begin_multiprocessing calculates which child had the highest win percentage, and then passes that back to play,
+where it selects the best move. 
+"""
