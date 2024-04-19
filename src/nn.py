@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 
 
@@ -7,7 +8,7 @@ class NeuralNetwork(nn.Module):
         super().__init__()
         self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(10, 32),
+            nn.Linear(9, 32),
             nn.ReLU(),
             nn.Linear(32, 32),
             nn.ReLU(),
@@ -22,7 +23,8 @@ class NeuralNetwork(nn.Module):
         return logits
 
 class NetContext:
-    def __init__(self, policy_net, target_net, optimizer, loss_function):
+    def __init__(self, player, policy_net, target_net, optimizer, loss_function):
+        self.player=player
         self.policy_net = policy_net
 
         self.target_net = target_net
@@ -31,3 +33,4 @@ class NetContext:
 
         self.optimizer = optimizer
         self.loss_function = loss_function
+

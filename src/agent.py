@@ -38,9 +38,10 @@ MIN_EVAL = -1000000
 MAX_EVAL =  1000000
 
 CACHE = './xroot.pkl'
-RUNS = 1
+RUNS = 10
 BREDTH = 2**12
-DEPTH = 20
+MAX_WINS = 2**12
+DEPTH = 10
 
 # the boards are of size 10 because index 0 isn't used
 boards = np.zeros((10, 10), dtype="int8")
@@ -149,14 +150,16 @@ def montecarl(
     curr_board: int,
     root: Optional[McNode] = None
 ) -> McNode:
-    # start_time = datetime.now()
+    start_time = datetime.now()
     if not root:
         root = McNode(deepcopy(boardz), curr_board, player=player)
-    # while (datetime.now() - start_time).total_seconds() < 2.5:
-    for _ in range(BREDTH):
+    while (datetime.now() - start_time).total_seconds() < 2.5:
+    # for _ in range(BREDTH):
         node = root
         while node.fully_expanded():
             node = max(node.children, key=lambda x: x.wins / x.visits + math.sqrt(2 * math.log(node.visits) / x.visits))
+        if abs(node.wins) >= MAX_WINS:
+            return root
         
         winner = sim_rand_game(node, 0)
 
@@ -243,9 +246,9 @@ def parse(r: McNode, string: str):
     if command == "second_move":
         # place the first move (randomly generated for opponent)
         place(int(args[0]), int(args[1]), 2)
-        curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
+        # curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
         move = 1
-        return play(1, curr_best_child)  # choose and return the second move
+        return play(1, None)  # choose and return the second move
 
     # third_move(K,L,M) means that the first and second move were
     # in square L of sub-board K, and square M of sub-board L,
@@ -253,12 +256,12 @@ def parse(r: McNode, string: str):
     elif command == "third_move":
         # place the first move (randomly generated for us)
         place(int(args[0]), int(args[1]), 1)
-        curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
+        # curr_best_child = r.make_child(bd=int(args[0]), move=int(args[1]))
         # place the second move (chosen by opponent)
         place(curr, int(args[2]), 2)
-        root = curr_best_child.make_child(move=int(args[2]))
+        # root = curr_best_child.make_child(move=int(args[2]))
         move = 2
-        return play(2, root) # choohe and return the third move
+        return play(2, None) # choohe and return the third move
 
     # nex_move(M) means that the previous move was into
     # square M of the designated sub-board,
