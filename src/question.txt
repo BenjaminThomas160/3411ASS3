@@ -1,10 +1,15 @@
 """
+By Connor Isaias-White (z5358331) and Ben Thomas (z5360881)
 Briefly describe how your program works, including any algorithms and data structures employed,
 and explain any design decisions you made along the way.
 
 Our algorithm employs the Monte Carlo Tree Search algorithm to make the best possible move.
-We initially attempted to solve the problem using an alpha-beta pruning approach, however 
-we ran into many problems.
+We initially attempted to solve the problem using an alpha-beta pruning approach, however we found montecarlo to be
+more effective.
+
+A monte carlo tree search works by randomly simulating games based off different moves and picking the move that tends
+to win more in the simulations, this allows us to not have to check check as many values in the timeframe we have and
+instead move based off probability
 
 To implement the Monte Carlo tree search algorithm, we use an object called 'McNode', (short for MonteCarloNode),
 each one of these essentially represents a different possible game state, and then has more game states in its children.
@@ -12,11 +17,12 @@ When the code is run, it begins multiprocessing using a process Pool, this is to
 it then calls 'begin_multiprocessing' which then fully expands the children in the root, and calls montcarl_wrapper on different processes
 for each child of the root node.
 montecarl is then called by montecarl_wrapper, this starts a timer for how long the algorithm gets to simulate random games for, currently
-we have it set to 2.2 seconds.
+we have it set to 2.5 seconds based off testing on CSE servers.
 
 The montecarl function then selects a node from the children of the node passed into montecarl, based off of the mathematical formula of 
 the montecarlo tree search w/n + c*sqrt(ln(N)/n), w is the number of wins for the node, n is the number of visits for the node, N is
 the number of visits to the parent node, and c controls how much exploration the algorithm will do, higher values meaning more exploration
+
 
 It then checks if the absolute value of the number of wins in this node is greater than a constant 'MAX_WINS', if it is, then we just return the 
 node, this allows us to win faster once we get over a threshold of number of wins in a node.
@@ -25,4 +31,17 @@ Using this node, it then calls sim_rand_game, which visits/simulates a random ga
 It then returns the winner, and we then backpropogate adding visits and wins or losses to the node based off of the winner.
 The node is then returned and then begin_multiprocessing calculates which child had the highest win percentage, and then passes that back to play,
 where it selects the best move. 
+We found we could cover more possibilities by limiting the depth of these random games to 10 and assuming a draw if it
+reaches this point. It was found that this would consistantly beat solutions with no depth limit or a depth limit of 20
+as it was better to run more games then run certain games very deep.
+
+We used heuristics in order to speed up certain options, the heuristic is done by always doing a move if it will lead
+to us winning that move and never doing a move that will lead to the opponent winning the next move unless that is the
+only option. This was implemented in the mcnode class by checking for the a win of children whenever it is created and
+stoping the simlulation if one of the children is a winner as any rational player would always pick this move. We ensure 
+that it can check this heuristic by making the function that "randomly" picks where to put a child to priorities
+picking a child that doesn't exist so we can ensure we have checked all children for a win.
+
+We found using this method we could consistantly beat lookt with depth 6 and around half the time beat lookt with depth
+7 and 8, and sometimes 9
 """
